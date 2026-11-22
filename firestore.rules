@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Login screen නැත. Anonymous sign-in background එකේ සිදුවේ.
+    // Website එක භාවිතා කරන ඕනෑම කෙනෙකුට data කියවීමට/වෙනස් කිරීමට/මැකීමට හැක.
+    match /records/{recordId} {
+      allow read, create, update, delete: if request.auth != null;
+    }
+  }
+}

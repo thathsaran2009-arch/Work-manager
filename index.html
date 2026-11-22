@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="si">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Work Manager</title>
+<style>
+:root{--bg:#0b1220;--panel:#121d30;--panel2:#18263d;--line:#263750;--text:#eef5ff;--muted:#9fb0c7;--blue:#39a7ff;--red:#ff657a}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#08101d,#101d31);color:var(--text);font:15px system-ui,Segoe UI,sans-serif}
+.wrap{max-width:1180px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+h1{font-size:25px;margin:0}h2{margin:0 0 12px}.sub{color:var(--muted);margin-top:5px}.panel{background:#121d30ef;border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 12px 35px #0004;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.stat{background:var(--panel2);padding:15px;border-radius:12px}.stat small{color:var(--muted)}.stat b{display:block;font-size:24px;margin-top:5px}
+label{display:block;color:var(--muted);font-size:13px;margin:0 0 6px}input{width:100%;padding:11px 12px;background:#0b1628;color:var(--text);border:1px solid var(--line);border-radius:9px;outline:none}input:focus{border-color:var(--blue)}
+.formgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.actions{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
+button{border:0;border-radius:9px;padding:11px 15px;background:var(--blue);color:#06111e;font-weight:700;cursor:pointer}button.secondary{background:#263750;color:var(--text)}button.danger{background:var(--red);color:#24040a}
+table{width:100%;border-collapse:collapse;min-width:650px}th,td{padding:12px 10px;border-bottom:1px solid var(--line);text-align:left}th{color:#9fcfff;font-size:13px}td{font-size:14px}.tablebox{overflow:auto}
+.toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.toolbar>div{min-width:170px;flex:1}
+.muted{color:var(--muted)}.right{display:flex;gap:8px;align-items:center}.pill{background:#173c36;color:#7df0c1;padding:5px 9px;border-radius:99px;font-size:12px}
+.hint{font-size:13px;color:var(--muted);line-height:1.6}#msg{margin-top:10px;color:#ffd58a;min-height:20px}
+@media(max-width:760px){.grid{grid-template-columns:repeat(2,1fr)}.formgrid{grid-template-columns:repeat(2,1fr)}.wrap{padding:14px}}
+@media(max-width:420px){.formgrid{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+ <header class="top">
+  <div><h1>📋 Work Manager</h1><div class="sub">වැඩ දත්ත කළමනාකරණ පද්ධතිය</div></div>
+  <div class="right"><span class="pill">LOGIN අවශ්‍ය නැහැ</span></div>
+ </header>
+ <section class="grid">
+  <div class="stat"><small>මුළු Records</small><b id="count">0</b></div>
+  <div class="stat"><small>මුළු CUP</small><b id="cups">0</b></div>
+  <div class="stat"><small>මුළු ගණනය (CUP × 4.5)</small><b id="total">0.00</b></div>
+  <div class="stat"><small>මේ මාසයේ CUP</small><b id="monthCups">0</b></div>
+ </section>
+ <section class="panel">
+  <h2 id="formTitle">අලුත් Record එකක්</h2>
+  <form id="recordForm" class="formgrid">
+   <div><label>ID</label><input id="recordId" required placeholder="උදා: 001"></div>
+   <div><label>Name</label><input id="name" required placeholder="නම"></div>
+   <div><label>Date</label><input id="date" type="date" required></div>
+   <div><label>CUP</label><input id="cup" type="number" min="0" step="0.01" required placeholder="0"></div>
+   <div class="actions"><button id="saveBtn" type="submit">Save Record</button><button id="cancelEdit" type="button" class="secondary" hidden>Cancel Edit</button></div>
+  </form>
+  <div id="msg"></div>
+ </section>
+ <section class="panel">
+  <div class="toolbar">
+   <div><label>Search (ID / Name)</label><input id="search" placeholder="Search..."></div>
+   <div><label>From Date</label><input id="fromDate" type="date"></div>
+   <div><label>To Date</label><input id="toDate" type="date"></div>
+   <div><label>Month report</label><input id="monthFilter" type="month"></div>
+   <div><button id="clearFilters" class="secondary">Clear Filters</button></div>
+  </div>
+ </section>
+ <section class="panel">
+  <div class="top"><div><h2>Records Table</h2><div class="sub">දත්ත online database එකේ save වේ.</div></div><span class="pill">Shared Live Data</span></div>
+  <div class="tablebox"><table><thead><tr><th>ID</th><th>Name</th><th>Date</th><th>CUP</th><th>Total × 4.5</th><th>Actions</th></tr></thead><tbody id="rows"></tbody></table></div>
+  <p class="hint">Login නැහැ. Website එකට පිවිසෙන ඕනෑම කෙනෙකුට records බලන්න, add/edit/delete කරන්න පුළුවන්. ඒ නිසා private හෝ සංවේදී තොරතුරු ඇතුළත් කරන්න එපා.</p>
+ </section>
+</div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+// Firebase Console > Project settings > Your apps වෙතින් config එක මෙතැන paste කරන්න.
+const firebaseConfig = {
+  apiKey: "PASTE_YOUR_API_KEY",
+  authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
+  projectId: "PASTE_YOUR_PROJECT_ID",
+  storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
+  messagingSenderId: "PASTE_YOUR_SENDER_ID",
+  appId: "PASTE_YOUR_APP_ID"
+};
+const app=initializeApp(firebaseConfig), auth=getAuth(app), db=getFirestore(app);
+const $=id=>document.getElementById(id);
+let records=[], editingId=null, stopListening=null;
+const msg=s=>$("msg").textContent=s;
+const fmt=n=>Number(n||0).toLocaleString("en-US",{maximumFractionDigits:2});
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function start(){
+ try{
+  await signInAnonymously(auth);
+  stopListening=onSnapshot(query(collection(db,"records"),orderBy("date","desc")),snap=>{
+   records=snap.docs.map(d=>({key:d.id,...d.data()}));render();
+  },e=>msg("Database error: "+e.message));
+ }catch(e){msg("Firebase setup error: "+(e.code||e.message)+". README.txt බලන්න.");}
+}
+$("recordForm").addEventListener("submit",async e=>{
+ e.preventDefault();
+ const data={recordId:$("recordId").value.trim(),name:$("name").value.trim(),date:$("date").value,cup:Number($("cup").value),updatedAt:new Date().toISOString()};
+ if(!data.recordId||!data.name||!data.date||!Number.isFinite(data.cup)||data.cup<0){msg("සියලුම තොරතුරු නිවැරදිව ඇතුළත් කරන්න.");return;}
+ try{if(editingId){await updateDoc(doc(db,"records",editingId),data);msg("Record එක update කළා.");}
+ else{data.createdAt=new Date().toISOString();await addDoc(collection(db,"records"),data);msg("Record එක save කළා.");}resetForm();}
+ catch(e){msg("Save වුණේ නැහැ: "+e.message);}
+});
+function resetForm(){editingId=null;$("recordForm").reset();$("date").value=new Date().toISOString().slice(0,10);$("formTitle").textContent="අලුත් Record එකක්";$("saveBtn").textContent="Save Record";$("cancelEdit").hidden=true;}
+$("cancelEdit").onclick=resetForm;
+function editRecord(key){const r=records.find(x=>x.key===key);if(!r)return;editingId=key;$("recordId").value=r.recordId;$("name").value=r.name;$("date").value=r.date;$("cup").value=r.cup;$("formTitle").textContent="Record එක Edit කරන්න";$("saveBtn").textContent="Update Record";$("cancelEdit").hidden=false;window.scrollTo({top:0,behavior:"smooth"});}
+async function removeRecord(key){if(!confirm("මෙම record එක delete කරන්නද?"))return;try{await deleteDoc(doc(db,"records",key));msg("Record එක delete කළා.");}catch(e){msg("Delete කළ නොහැක: "+e.message);}}
+function render(){
+ const s=$("search").value.toLowerCase(),from=$("fromDate").value,to=$("toDate").value,month=$("monthFilter").value;
+ const list=records.filter(r=>(!s||(r.recordId+" "+r.name).toLowerCase().includes(s))&&(!from||r.date>=from)&&(!to||r.date<=to)&&(!month||r.date.startsWith(month)));
+ const sum=list.reduce((a,r)=>a+Number(r.cup||0),0),thisMonth=new Date().toISOString().slice(0,7);
+ $("count").textContent=list.length;$("cups").textContent=fmt(sum);$("total").textContent=fmt(sum*4.5);
+ $("monthCups").textContent=fmt(records.filter(r=>r.date?.startsWith(thisMonth)).reduce((a,r)=>a+Number(r.cup||0),0));
+ $("rows").innerHTML=list.map(r=>`<tr><td>${esc(r.recordId)}</td><td>${esc(r.name)}</td><td>${esc(r.date)}</td><td>${fmt(r.cup)}</td><td>${fmt(Number(r.cup)*4.5)}</td><td><button class="secondary" data-edit="${r.key}">Edit</button> <button class="danger" data-del="${r.key}">Delete</button></td></tr>`).join("")||'<tr><td colspan="6" class="muted">දත්ත නැහැ.</td></tr>';
+ document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>editRecord(b.dataset.edit));
+ document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>removeRecord(b.dataset.del));
+}
+["search","fromDate","toDate","monthFilter"].forEach(id=>$(id).addEventListener("input",render));
+$("clearFilters").onclick=()=>{["search","fromDate","toDate","monthFilter"].forEach(id=>$(id).value="");render();};
+resetForm();start();
+</script>
+</body></html>
